@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from typing import List
@@ -8,12 +8,14 @@ from db import connect_to_mongo, close_mongo_connection, get_database
 from models import *
 from auth import verify_google_token, create_access_token, get_current_user_id
 
+ACCESS_TOKEN_EXPIRE_HOURS = 24
+
 app = FastAPI(title="Resume Builder API", version="1.0.0")
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Add your frontend URL
+    allow_origins=["http://localhost:5173"],  # Add your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,7 +33,7 @@ async def shutdown_db_client():
 # ====== AUTHENTICATION ROUTES ======
 
 @app.post("/auth/google")
-async def google_login(google_token: dict):
+async def google_login(google_token: dict, response: Response):
     """
     Authenticate user with Google ID token
     """
@@ -68,10 +70,19 @@ async def google_login(google_token: dict):
     
     # Create JWT token
     access_token = create_access_token({"sub": user_id})
+
+    # 🔐 Set JWT as HttpOnly cookie so frontend never has to store it
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,          # ⬅️ use True in production (HTTPS)
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+    )
     
+    # We no longer need to return the token
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
         "user": {
             "id": user_id,
             "email": user_info["email"]

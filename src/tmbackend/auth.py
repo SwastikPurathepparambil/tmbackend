@@ -37,10 +37,22 @@ def verify_token(token: str):
             detail="Invalid authentication credentials",
         )
 
-async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """FastAPI dependency to get current user ID from JWT"""
-    user_id = verify_token(credentials.credentials)
+from fastapi import HTTPException, status, Depends, Request
+
+# ... keep your existing imports, SECRET_KEY, ALGORITHM, etc.
+
+async def get_current_user_id(request: Request):
+    """Get current user ID from JWT stored in HttpOnly cookie"""
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    user_id = verify_token(token)
     return user_id
+
 
 async def verify_google_token(token: str):
     """Verify Google ID token and return user info"""

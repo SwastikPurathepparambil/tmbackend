@@ -7,7 +7,13 @@ requires-python = ">=3.10,<3.14"
 dependencies = [
     "crewai[tools]==1.4.1",
     "dotenv>=0.9.9",
+    "fastapi>=0.121.3",
+    "google-auth>=2.43.0",
+    "motor>=3.7.1",
     "pymongo[srv]>=4.15.4",
+    "python-dotenv>=1.2.1",
+    "python-jose>=3.5.0",
+    "uvicorn>=0.38.0",
 ]
 
 [project.scripts]
