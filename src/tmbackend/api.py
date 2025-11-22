@@ -4,9 +4,10 @@ from datetime import datetime
 from typing import List
 from bson import ObjectId
 
-from db import connect_to_mongo, close_mongo_connection, get_database
-from models import *
-from auth import verify_google_token, create_access_token, get_current_user_id
+from tmbackend.db import connect_to_mongo, close_mongo_connection, get_database
+from tmbackend.models import *
+from tmbackend.auth import verify_google_token, create_access_token, get_current_user_id
+
 
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 

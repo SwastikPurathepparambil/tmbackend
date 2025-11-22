@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 from typing import Optional
 import asyncio
+import certifi
 
 # Load .env so MONGO_URI and DATABASE_NAME are available
 load_dotenv()
@@ -33,6 +34,7 @@ async def connect_to_mongo():
             mongo_uri,
             maxPoolSize=10,
             minPoolSize=1,
+            tlsCAFile=certifi.where(),
         )
 
         # Test the connection
