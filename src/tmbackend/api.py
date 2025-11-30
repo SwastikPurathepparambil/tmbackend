@@ -14,10 +14,16 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 app = FastAPI(title="Resume Builder API", version="1.0.0")
 
+origins = [
+    "http://localhost:5173",           # local dev
+    "https://tailormake.vercel.app",   # prod frontend on Vercel
+]
+
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Add your frontend URL
+    allow_origins=origins,  # Add your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
