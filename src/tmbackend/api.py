@@ -11,6 +11,8 @@ from models import *
 from auth import verify_google_token, create_access_token, get_current_user_id
 
 ACCESS_TOKEN_EXPIRE_HOURS = 24
+ENV = os.getenv("ENVIRONMENT", "dev")
+IS_PROD = ENV == "prod"
 
 app = FastAPI(title="Resume Builder API", version="1.0.0")
 
@@ -84,7 +86,7 @@ async def google_login(google_token: dict, response: Response):
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,          # ⬅️ use True in production (HTTPS)
+        secure=IS_PROD,          # ⬅️ use True in production (HTTPS)
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
     )
