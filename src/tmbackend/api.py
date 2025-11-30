@@ -85,7 +85,7 @@ async def google_login(google_token: dict, response: Response):
         value=access_token,
         httponly=True,
         secure=True,          # ⬅️ use True in production (HTTPS)
-        samesite="none",
+        samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
     )
     
