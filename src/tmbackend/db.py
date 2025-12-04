@@ -14,6 +14,7 @@ class Database:
     database = None
     users_collection = None
     resumes_collection = None
+    tailored_resumes_collection = None
 
 
 db = Database()
@@ -43,6 +44,8 @@ async def connect_to_mongo():
         db.database = db.client[database_name]
         db.users_collection = db.database.users
         db.resumes_collection = db.database.resumes
+        db.tailored_resumes_collection = db.database.tailored_resumes
+
 
         # Create indexes for better performance
         await create_indexes()

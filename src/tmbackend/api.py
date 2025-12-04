@@ -9,6 +9,7 @@ import uvicorn
 from db import connect_to_mongo, close_mongo_connection, get_database
 from models import *
 from auth import verify_google_token, create_access_token, get_current_user_id
+from tmbackend.run_tailor import b64_to_bytes, run_tailor_pipeline
 
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 ENV = os.getenv("ENVIRONMENT", "dev")
@@ -116,6 +117,18 @@ async def get_current_user(user_id: str = Depends(get_current_user_id)):
         created_at=user["created_at"],
         last_login_at=user["last_login_at"]
     )
+
+
+@app.post("/auth/logout")
+def logout(response: Response):
+    # Must match the key & settings you used in set_cookie
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=IS_PROD,   # same as when you set it
+        samesite="lax",
+    )
+    return {"ok": True}
 
 # ====== RESUME ROUTES ======
 
@@ -296,7 +309,143 @@ async def delete_resume(
 async def health_check():
     return {"status": "healthy"}
 
+# ====== Tailor RESUME ROUTES ======
+from bson import Binary
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse
+
+import base64
+
+from pydantic import BaseModel
+from typing import Optional
+
+class ResumeUpload(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    base64: Optional[str] = None
+
+class TailorPayload(BaseModel):
+    topic: Optional[str] = None
+    workExperience: Optional[str] = None
+    jobLink: Optional[str] = None
+    resume: Optional[ResumeUpload] = None
+    submittedAt: Optional[str] = None
+
+
+@app.post("/tailor")
+async def tailor_endpoint(
+    payload: TailorPayload,
+    user_id: str = Depends(get_current_user_id)
+    ):
+    # Decode uploaded resume (ephemeral)
+    resume_bytes = None
+    resume_mime = None
+    if payload.resume and payload.resume.base64:
+        resume_bytes = b64_to_bytes(payload.resume.base64)
+        resume_mime = payload.resume.type
+
+    # Run CrewAI pipeline (sync)
+    result = run_tailor_pipeline(
+        topic=payload.jobLink or payload.topic or "",
+        work_experience=payload.workExperience,
+        resume_bytes=resume_bytes,
+        resume_mime=resume_mime,
+    )
+
+    pdf_bytes = result["pdf_bytes"]
+    filename = result["filename"]
+
+    # Save PDF in Mongo if you want it on the home page
+    db = get_database()
+    doc = {
+        "user_id": user_id,
+        "filename": filename,
+        "mime": "application/pdf",
+        "pdfData": Binary(pdf_bytes),
+        "jobLink": payload.jobLink,
+        "createdAt": datetime.utcnow(),
+    }
+    inserted = await db.tailored_resumes_collection.insert_one(doc)
+
+    # Base64 for instant preview
+    pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+    return {
+        "ok": True,
+        "result": {
+            "id": str(inserted.inserted_id),
+            "filename": filename,
+            "pdfBase64": pdf_base64,
+            "pdfUrl": f"/resumes/{inserted.inserted_id}/pdf",  # if you add such a route
+        },
+    }
+
+from typing import List
+
+@app.get("/tailored-resumes")
+async def list_tailored_resumes(
+    user_id: str = Depends(get_current_user_id),
+):
+    db = get_database()
+
+    cursor = db.tailored_resumes_collection.find(
+        {"user_id": user_id}
+    ).sort("createdAt", -1)
+
+    items = []
+    async for doc in cursor:
+        items.append({
+            "id": str(doc["_id"]),
+            "filename": doc.get("filename", ""),
+            "jobLink": doc.get("jobLink"),
+            "createdAt": doc.get("createdAt"),
+        })
+
+    return items
+
+import io
+from fastapi.responses import StreamingResponse
+from bson import ObjectId
+
+@app.get("/tailored-resumes/{resume_id}/pdf")
+async def get_tailored_resume_pdf(
+    resume_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    if not ObjectId.is_valid(resume_id):
+        raise HTTPException(status_code=400, detail="Invalid resume ID")
+
+    db = get_database()
+    doc = await db.tailored_resumes_collection.find_one({
+        "_id": ObjectId(resume_id),
+        "user_id": user_id,   # 🔒 only allow owner
+    })
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Tailored resume not found")
+
+    pdf_bytes = bytes(doc["pdfData"])
+    filename = doc.get("filename", "tailored_resume.pdf")
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
